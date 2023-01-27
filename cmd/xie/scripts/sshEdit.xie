@@ -1,0 +1,193 @@
+// 本例演示通过SSH连接直接编辑服务器上的文件
+// 用法：xie sshEdit.xie -host=youdomain.com -pass=password -remotePath=/root/a1.bin
+// 注意使用时将上面参数中的内容替换为自己的实际内容
+
+getSwitch $hostT $argsG "-host=" ""
+
+getSwitch $portT $argsG "-port=" "22"
+
+getSwitch $userT $argsG "-user=" "root"
+
+getSwitch $passT $argsG "-pass=" ""
+
+getSwitch $remotePathT $argsG "-remotePath=" ""
+
+sshDownloadBytes $textT -host=$hostT -port=$portT -user=$userT -password=$passT -path=$localPathT -remotePath=$remotePathT
+
+ifErrX $textT +1 +2
+    fatalf "从服务器下载内容失败（failed to download file content）：%v (%v)" $remotePathT $textT
+
+toStr $textT $textT 
+
+// 初始化GUI环境
+guiInit
+
+assign $htmlT `
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <title>编辑远程文件……</title>
+</head>
+<body >
+	<div style="margin-top: 10px; margin-bottom: 10px;">
+		<label for="remotePathID" >远程路径： </label><input id="remotePathID" type=text readonly />
+	</div>
+	<div style="margin-top: 10px; margin-bottom: 10px;">
+		<textarea id="mainTextArea" style="width: 90%; height: 80%;"></textarea>
+	</div>
+	<div>
+		<button id="btnLoadID" cmd="reload">重新载入</button>
+		<button id="btnSaveID" cmd="save">保存</button>
+		<button id="btnClose">关闭</button>
+	</div>
+
+    <script type="text/javascript">
+        function moveToCenter(jsonA) {
+            var wh = Window.this.screenBox("frame", "dimension");
+            console.log(wh);
+
+            var obj = JSON.parse(jsonA);
+
+            var w = wh[0]
+            var h = wh[1]
+
+            var w1n = obj.Width;
+            var h1n = obj.Height;
+
+            Window.this.move((w-w1n)/2, (h-h1n)/2, w1n, h1n);
+
+            return printf("%v|%v", w, h);
+        }
+
+        function showMsg(titleA, textA) {
+            Window.this.modal(<alert caption={titleA}>{textA}</alert>);
+        }
+
+        function setRemotePath(pathA) {
+            document.getElementById("remotePathID").value = pathA;
+        }
+
+        function setTextValue(textA) {
+            console.log("textA", textA);
+            document.getElementById("mainTextArea").value = textA;
+        }
+
+        function sendCmd(e, senderA) {
+            var rs = Window.this.xcall("delegateDo", JSON.stringify({"cmd": senderA.getAttribute("cmd"), "text": document.getElementById("mainTextArea").value}));
+
+            showMsg("命令执行结果", rs);
+
+        }
+
+        function closeWindow() {
+            Window.this.close();
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("文档加载完毕");
+
+   			var buttonT = document.getElementById("btnClose");
+
+			buttonT.addEventListener("click", closeWindow);
+
+            document.on("click","button#btnLoadID", sendCmd);
+
+            document.on("click","button#btnSaveID", sendCmd);
+
+            globalThis.showMsg = showMsg;
+
+            globalThis.moveToCenter = moveToCenter;
+
+            globalThis.setTextValue = setTextValue;
+
+            globalThis.setRemotePath = setRemotePath;
+
+       }, false);
+
+    </script>
+</body>
+</html>
+`
+
+strReplace $htmlT $htmlT ~~~ $backQuoteG
+
+// 新建窗口，第二个参数传入了JSON格式的表示左、上、宽、高的窗口位置与大小的字符串
+// 但实际上由于下面调用了TiScript中的moveToCenter函数，因此将会使这里定义的宽和高无效
+guiNewWindow $windowT 测试 `[300,200,600,400]` $htmlT
+
+// 调用前面HTML代码中TiScript脚本内定义的moveToCenter函数，并传入表示宽与高的JSON字符串
+mt $rs $windowT call moveToCenter `{"Width":800, "Height":600}`
+
+// 输出moveToCenter函数的返回值
+plo $rs
+
+mt $rs $windowT call setRemotePath $remotePathT
+mt $rs $windowT call setTextValue $textT
+
+// 创建并设定与界面之间的快速代理对象
+new $dele1 quickDelegate :deleFast1
+mt $rs $windowT setDelegate $dele1
+
+// 运行图形界面
+mt $rs $windowT show
+
+# pl "showWindowResult: %v" $rs
+
+exit
+
+// 快速代理对象的代码
+// 用于在WEB图形界面GUI中回调函数
+:deleFast1
+
+    pop $inputT
+
+    pl "inputT: %v" $inputT
+
+    fromJson $cmdObjT $inputT
+
+    {} $cmdT $cmdObjT "cmd" ""
+    {} $textT $cmdObjT "text" ""
+
+    # pl "cmd: %T(%v) %v %v" $cmdT $cmdT @`$cmdT == "save"` $textT
+
+    if @`$cmdT == "save"` :+1 :inext2
+        pln "upload text"
+        
+        # convert $buf1 $textT byteList
+
+        sshUploadBytes $rs1 $textT -host=$hostT -port=$portT -user=$userT -password=$passT -remotePath=$remotePathT -force
+
+        ifErrX $rs1 :+1 :inextErr1
+            spr $rs "远程保存失败：%v" $rs1
+            push $rs
+            fastRet
+        
+        :inextErr1
+            push "远程保存完毕"
+            fastRet
+
+    :inext2
+    if @`$cmdT == "reload"` :+1 :inext3
+        pln "reload text"
+        
+        sshDownloadBytes $rs2 -host=$hostT -port=$portT -user=$userT -password=$passT -remotePath=$remotePathT
+
+        ifErrX $rs2 :+1 :inextErr2
+            spr $rs "重新载入失败：%v" $rs2
+            push $rs
+            fastRet
+        
+        :inextErr2
+            toStr $rs2 $rs2
+            mt $rs $windowT call setTextValue $rs2
+            push "重新载入完毕"
+            fastRet
+
+    :inext3
+    pln 未知命令
+
+    push ""
+
+    fastRet

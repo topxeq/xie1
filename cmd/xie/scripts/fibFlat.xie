@@ -1,0 +1,67 @@
+getParam $roundStrT $argsG 2 ``
+
+isEmpty $br $roundStrT
+
+ifNot  $br :next1
+    pln `参数不够`
+exit
+
+:next1
+
+convert $roundT $roundStrT int
+
+now $t1
+
+push $roundT
+
+call :fib
+
+now $t2
+
+timeSub $timeDiffT $t2 $t1
+
+convert $timeDiffT $timeDiffT float
+
+div $timeDiffT $timeDiffT #f1000
+
+pl `%v 秒` $timeDiffT
+
+pln $pop
+
+exit
+
+:fib
+    var $c
+ 
+    pop $c
+
+    < $br $c #i2
+
+    if $br :label1
+
+    :else
+        assignLocal $fibo #i1
+        assignLocal $fiboPrev #i1
+
+        assignLocal $i #i2
+
+        var $temp
+        
+        :loop1
+            assign $temp $fibo
+
+            add $fibo $fibo $fiboPrev
+
+            assign $fiboPrev $temp
+
+            inc $i
+            < $br2 $i $c
+            if $br2 :loop1
+
+        push $fibo
+        ret
+
+    :label1
+        push $c
+        ret
+

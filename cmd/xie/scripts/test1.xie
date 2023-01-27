@@ -1,0 +1,30 @@
+pln inputG: $inputG
+
+pl argsG=%v $argsG
+
+var a
+
+assign $a abc
+
+strAdd $a `sdjkfhdk
+132312234
+风扇电机开发的时刻
+`
+
+pop
+
+strAdd $a `^*^*^*||(&@#)`
+
+pop $b
+
+plv $a
+
+plv $b
+
+pln abc 123 "[code name is 天道]" $a
+
+debugInfo
+
+plo
+
+pass
